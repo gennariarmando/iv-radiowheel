@@ -30,7 +30,7 @@ public:
     static inline uint32_t m_nTimePassedAfterQuickSwitch = 0;
     static inline uint32_t m_nTimePassedForDisplayingTrackNames = 0;
     static inline bool m_bDisableControls = false;
-    static inline std::unordered_map<int32_t, std::wstring> m_TracksMap;
+    static inline std::unordered_map<int32_t, std::wstring> m_TracksMap = {};
 
     static inline void UpdateCursor() {
         int32_t x = rage::ioMouse::m_X;
@@ -198,6 +198,9 @@ public:
     }
 
     static inline void DrawQuickSwitch() {
+        if (CCutsceneMgr::IsRunning())
+            return;
+
         if (m_bShowRadioWheel)
             return;
 
@@ -1222,4 +1225,5 @@ public:
         m_TracksMap[0x5CB9435B] = L"FRANKIE PAUL~n~Worries In The Dance";
         m_TracksMap[0x4EE9A7BC] = L"MR. VEGAS~n~Mus Come a Road";
     }
+    
 } radioWheelIV;
