@@ -31,6 +31,8 @@ public:
     static inline uint32_t m_nTimePassedForDisplayingTrackNames = 0;
     static inline bool m_bDisableControls = false;
     static inline std::unordered_map<int32_t, std::wstring> m_TracksMap = {};
+    static inline bool bScreenOverlay = false;
+    static inline bool bSlowMotion = false;
 
     static inline void UpdateCursor() {
         int32_t x = rage::ioMouse::m_X;
@@ -236,14 +238,30 @@ public:
     }
 
     static inline rage::Color32 GetColorForEpisode() {
-        rage::Color32 col = CHudColours::Get(HUD_COLOUR_MENU_YELLOW_DARK, 255);
+        rage::Color32 col = CHudColours::Get(HUD_COLOUR_GREEN, 255);
         switch (gGameEpisode) {
-            case EPISODE_TBOGT:
-                col = CHudColours::Get(HUD_COLOUR_MENU_BLUE, 255);
-                break;
+        case EPISODE_TLAD:
+            col = CHudColours::Get(HUD_COLOUR_MENU_YELLOW_DARK, 255);
+            break;
+        case EPISODE_TBOGT:
+            col = CHudColours::Get(HUD_COLOUR_MENU_BLUE, 255);
+            break;
         }
 
         return col;
+    }
+
+    static inline void Overlay() {
+        rage::Color32 col = GetColorForEpisode();
+        col.a = 25;
+        rage::grcTexturePC* tex = rage::CPostFX::GetInstance()->m_Blur2;
+        static CSprite2d sprite;
+        sprite.m_pTexture = tex;
+        sprite.SetRenderState();
+        CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, { 25, 25, 25, 255 });
+        CSprite2d::ClearRenderState();
+
+        CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, col);
     }
 
     static inline void DrawWheel() {
@@ -252,6 +270,9 @@ public:
 
         if (!m_bShowRadioWheel)
             return;
+
+        if (bScreenOverlay)
+            Overlay();
 
         int32_t currRadio = GetCurrentRadioStationFix();
         int32_t numStations = audRadioStation::GetNumStations() + 1;
@@ -350,7 +371,8 @@ public:
             return;
 
         if (on) {
-            CTimer::ms_fTimeScale = 0.25f;
+            if (bSlowMotion)
+                CTimer::ms_fTimeScale = 0.1f;
             auto cam = TheCamera.m_pCamGame;
             if (cam)
                 cam->m_bDisableControls = true;
@@ -362,7 +384,8 @@ public:
             m_bShowRadioWheel = true;
         }
         else {
-            CTimer::ms_fTimeScale = 1.0f;
+            if (bSlowMotion)
+                CTimer::ms_fTimeScale = 1.0f;
             auto cam = TheCamera.m_pCamGame;
             if (cam)
                 cam->m_bDisableControls = false;
@@ -391,17 +414,39 @@ public:
         return m_bDisableControls;
     }
 
+    static inline void ReadSettings() {
+        plugin::config_file config(true, false);
+        bScreenOverlay = config["bScreenOverlay"].asBool(false);
+        bSlowMotion = config["bSlowMotion"].asBool(false);
+    }
+
     RadioWheelIV() {
         plugin::Events::initEngineEvent += []() {
-            m_SpriteLoader.LoadAllSpritesFromTxd("platform:/textures/radiowheel");
             PopulateTracksMap();
+            ReadSettings();           
         };
         
         plugin::Events::shutdownEngineEvent += []() {
             m_SpriteLoader.Clear();
         };
 
-        plugin::Events::initGameEvent.before += []() {
+        plugin::Events::initGameEvent += []() {
+            m_SpriteLoader.Clear();
+
+            std::string fileName = "platform:/textures/radiowheel";
+            std::string gameName = {};
+            switch (CMenuManager::m_Episode) {
+                case EPISODE_TLAD:
+                    gameName = "_tlad";
+                    break;
+                case EPISODE_TBOGT:
+                    gameName = "_tbogt";
+                    break;
+            }
+
+            if (gameName.empty() || !m_SpriteLoader.LoadAllSpritesFromTxd(fileName + gameName))
+                m_SpriteLoader.LoadAllSpritesFromTxd(fileName);
+
             m_bShowRadioWheel = false;
         };
 
