@@ -18,8 +18,10 @@ to map this input to another key from your keyboard. ("Q" in GTA V)
 
 ## Screenshot:
 <p align="center">
-<img src="https://i.imgur.com/ixPviPn.jpg" width="640" height="360">
-<img src="https://i.imgur.com/aOG1GHL.jpg" width="640" height="360">
+<img src="https://i.imgur.com/zeLacSI.png" width="853" height="360">
+<img src="https://i.imgur.com/02hkzPm.jpg" width="853" height="360">
+<img src="https://i.imgur.com/KT0ZP9Q.png" width="853" height="360">
+<img src="https://i.imgur.com/ZvFPdMX.png" width="853" height="360">
 </p>
 
 Radio Icons by Ash_735
