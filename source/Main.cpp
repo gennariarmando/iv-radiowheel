@@ -1288,6 +1288,7 @@ public:
         m_TracksMap[0x7D53A852] = L"LEEWAY~n~Enforcer";
         m_TracksMap[0x71162A3E] = L"MARAKESH~n~Jdat";
         m_TracksMap[0x7219AFA4] = L"AC/DC~n~Touch Too Much";
+        m_TracksMap[0x722536DA] = L"GLUKOZA~n~Schweine";
         m_TracksMap[0x780870EA] = L"ÁNGEL Y KHRIZ FEAT. GOCHO & JOHN ERIC~n~Na De Na";
         m_TracksMap[0x774208CB] = L"MAI TAI~n~History";
         m_TracksMap[0x7873516D] = L"LEEWAY~n~Enforcer";
