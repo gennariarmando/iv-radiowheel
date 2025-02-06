@@ -55,4 +55,3 @@ static float ScaleH(float h) {
     float f = ((h) * (float)SCREEN_HEIGHT / DEFAULT_SCREEN_HEIGHT);
     return f * ScaleMult;
 }
-

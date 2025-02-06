@@ -18,6 +18,10 @@
 
 #include "Utility.h"
 
+#include "Resource.h"
+
+#include "dxsdk/d3d9.h"
+
 class __declspec(dllexport) RadioWheelIV {
 public:
     static inline plugin::SpriteLoader m_SpriteLoader = {};
@@ -31,8 +35,11 @@ public:
     static inline uint32_t m_nTimePassedForDisplayingTrackNames = 0;
     static inline bool m_bDisableControls = false;
     static inline std::unordered_map<int32_t, std::wstring> m_TracksMap = {};
-    static inline bool bScreenOverlay = false;
-    static inline bool bSlowMotion = false;
+
+    static inline bool m_bScreenOverlay = false;
+    static inline bool m_bSlowMotion = false;
+    static inline IDirect3DPixelShader9* m_BlurShader = nullptr;
+    static inline float m_fShaderConstant[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
     static inline void UpdateCursor() {
         int32_t x = rage::ioMouse::m_X;
@@ -251,17 +258,46 @@ public:
         return col;
     }
 
+    static inline HMODULE hModule = nullptr;
+    static inline IDirect3DPixelShader9* CreatePixelShaderFromResource(int id) {
+        if (!hModule)
+            GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)CreatePixelShaderFromResource, &hModule);
+
+        IDirect3DPixelShader9* ps = nullptr;
+        HRSRC resource = FindResource(hModule, MAKEINTRESOURCE(id), RT_RCDATA);
+        if (resource) {
+            auto shader = LoadResource(hModule, resource);
+
+            if (shader) {
+                GetD3DDevice<IDirect3DDevice9>()->CreatePixelShader((const DWORD*)shader, &ps);
+                FreeResource(shader);
+            }
+        }
+
+        return ps;
+    }
+
     static inline void Overlay() {
         rage::Color32 col = GetColorForEpisode();
         col.a = 25;
-        rage::grcTexturePC* tex = rage::CPostFX::GetInstance()->m_Blur2;
-        static CSprite2d sprite;
+        rage::grcTexturePC* tex = rage::CPostFX::GetInstance()->m_FSCopy;
+
+        static CSprite2d sprite = {};
         sprite.m_pTexture = tex;
         sprite.SetRenderState();
+
+        auto dev = GetD3DDevice<IDirect3DDevice9>();
+        dev->SetPixelShader(m_BlurShader);
+        dev->SetPixelShaderConstantF(0, m_fShaderConstant, 1);
+
         CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, { 25, 25, 25, 255 });
+
+        dev->SetPixelShader(nullptr);
+
         CSprite2d::ClearRenderState();
 
-        CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, col);
+        //
+        //CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, col);
     }
 
     static inline void DrawWheel() {
@@ -271,7 +307,7 @@ public:
         if (!m_bShowRadioWheel)
             return;
 
-        if (bScreenOverlay)
+        if (m_bScreenOverlay)
             Overlay();
 
         int32_t currRadio = GetCurrentRadioStationFix();
@@ -371,7 +407,7 @@ public:
             return;
 
         if (on) {
-            if (bSlowMotion)
+            if (m_bSlowMotion)
                 CTimer::ms_fTimeScale = 0.1f;
             auto cam = TheCamera.m_pCamGame;
             if (cam)
@@ -384,7 +420,7 @@ public:
             m_bShowRadioWheel = true;
         }
         else {
-            if (bSlowMotion)
+            if (m_bSlowMotion)
                 CTimer::ms_fTimeScale = 1.0f;
             auto cam = TheCamera.m_pCamGame;
             if (cam)
@@ -416,18 +452,29 @@ public:
 
     static inline void ReadSettings() {
         plugin::config_file config(true, false);
-        bScreenOverlay = config["bScreenOverlay"].asBool(false);
-        bSlowMotion = config["bSlowMotion"].asBool(false);
+        m_bScreenOverlay = config["bScreenOverlay"].asBool(false);
+        m_bSlowMotion = config["bSlowMotion"].asBool(false);
+    }
+
+    static inline void InitShaders() {
+        m_BlurShader = CreatePixelShaderFromResource(IDR_BLUR);
+    }
+
+    static inline void ShutdownShaders() {
+        m_BlurShader->Release();
+        m_BlurShader = nullptr;
     }
 
     RadioWheelIV() {
         plugin::Events::initEngineEvent += []() {
             PopulateTracksMap();
             ReadSettings();           
+            InitShaders();
         };
         
-        plugin::Events::shutdownEngineEvent += []() {
+        plugin::Events::shutdownEngineEvent.before += []() {
             m_SpriteLoader.Clear();
+            ShutdownShaders();
         };
 
         plugin::Events::initGameEvent += []() {
