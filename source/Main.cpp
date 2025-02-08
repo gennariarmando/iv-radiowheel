@@ -29,7 +29,7 @@ public:
     static inline rage::Vector2 m_vCursor = {};
     static inline rage::Vector2 m_vPrevCursor = {};
     static inline bool m_bRadioSelected = false;
-    static inline float m_fCursorRadius = 0.0f;
+    static inline rage::Vector2 m_vCursorRadius = {};
     static inline uint32_t m_nTimePassedAfterKeyPress = 0;
     static inline uint32_t m_nTimePassedAfterQuickSwitch = 0;
     static inline uint32_t m_nTimePassedForDisplayingTrackNames = 0;
@@ -39,7 +39,6 @@ public:
     static inline bool m_bScreenOverlay = false;
     static inline bool m_bSlowMotion = false;
     static inline IDirect3DPixelShader9* m_BlurShader = nullptr;
-    static inline float m_fShaderConstant[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 
     static inline void UpdateCursor() {
         int32_t x = rage::ioMouse::m_X;
@@ -63,8 +62,8 @@ public:
     }
 
     static inline void SetCursorToCurrentRadio(int32_t i, int32_t numIcons) {
-        float x, y, s;
-        GetIconCoords(i + 1, numIcons, x, y, s);
+        float x, y, sw, sh;
+        GetIconCoords(i + 1, numIcons, x, y, sw, sh);
         m_vCursor = { x, y };
     }
 
@@ -79,15 +78,24 @@ public:
     static inline rage::Vector2 LimitPos(rage::Vector2 pos) {
         rage::Vector2 centerPosition = GetCentreOfWheel();
 
-        float dist = (pos - centerPosition).Magnitude();
-        float angle = std::atan2(pos.y - centerPosition.y, pos.x - centerPosition.x);
+        rage::Vector2 dir = pos - centerPosition;
+        float angle = std::atan2(dir.y, dir.x);
+        float radiusX = ScaleX(m_vCursorRadius.x);
+        float radiusY = ScaleY(m_vCursorRadius.y);
 
-        float radius = m_fCursorRadius;
-        pos.x = centerPosition.x + radius * std::cos(angle);
-        pos.y = centerPosition.y + radius * std::sin(angle);
+        float ellipseFactor = std::sqrt(
+            (dir.x * dir.x) / (radiusX * radiusX) +
+            (dir.y * dir.y) / (radiusY * radiusY)
+        );
+
+        if (ellipseFactor > 0.0f) {
+            pos.x = centerPosition.x + (dir.x / ellipseFactor);
+            pos.y = centerPosition.y + (dir.y / ellipseFactor);
+        }
 
         return pos;
     }
+
 
     static inline int32_t GetCurrentRadioStationFix() {
         int32_t currRadio = audRadioStation::ms_CurrRadioStationRoll;
@@ -131,15 +139,20 @@ public:
         audRadioStation::ms_CurrRadioStation = value;
     }
 
-    static inline void GetIconCoords(int32_t i, int32_t numIcons, float& x, float& y, float& scale) {
-        float s = 33.0f;
-        float radius = (s / sin(M_PI / numIcons));
+    static inline void GetIconCoords(int32_t i, int32_t numIcons, float& x, float& y, float& scaleW, float& scaleH) {
+        float sW = (33.0f);
+        float sH = (33.0f);
+
+        float radiusW = (sW / sin(M_PI / numIcons));
+        float radiusH = (sH / sin(M_PI / numIcons));
         float angle = (2 * M_PI / numIcons);
 
-        scale = ScaleY(s);
-        x = (SCREEN_WIDTH / 2) - ScaleX(radius * sinf((i * angle) - M_PI));
-        y = (SCREEN_HEIGHT / 2) - ScaleY((radius * cosf((i * angle) - M_PI))) - scale;
-        m_fCursorRadius = ScaleY(radius);
+        scaleW = ScaleX(sW);
+        scaleH = ScaleY(sH);
+        x = (SCREEN_WIDTH / 2) - ScaleX(radiusW * sinf((i * angle) - M_PI));
+        y = (SCREEN_HEIGHT / 2) - ScaleY((radiusH * cosf((i * angle) - M_PI))) - scaleH;
+        m_vCursorRadius.x = radiusW;
+        m_vCursorRadius.y = radiusH;
     }
 
     static bool CheckCollision(const rage::Vector2& point1, const rage::Vector2& point2, float radius) {
@@ -148,22 +161,24 @@ public:
     }
 
     static inline void DrawIcon(const char* spriteName, int32_t pos, int32_t numIcons, rage::Color32 const& col, bool zoom) {
-        float x, y, scale = 0.0f;
-        GetIconCoords(pos + 1, numIcons, x, y, scale);
+        float x, y, sw, sh = 0.0f;
+        GetIconCoords(pos + 1, numIcons, x, y, sw, sh);
 
-        if (zoom)
-            scale += ScaleY(4.0f);
+        if (zoom) {
+            sw += ScaleX(4.0f);
+            sh += ScaleY(4.0f);
+        }
         else {
-            if (!m_bRadioSelected && (m_vPrevCursor - m_vCursor).Magnitude() > 0.0f && CheckCollision(m_vCursor, { x, y }, ScaleY(24.0f))) {
+            if (!m_bRadioSelected && (m_vPrevCursor - m_vCursor).Magnitude() > 0.0f && CheckCollision(m_vCursor, { x, y }, ScaleY(28.0f))) {
                 RetuneRadio(pos);
                 m_bRadioSelected = true;
             }
         }
 
         auto sprite = m_SpriteLoader.GetSprite(spriteName);
-        if (sprite) {
-            sprite->SetRenderState();
-            CSprite2d::Draw({ x - scale, y - scale, x + scale, y + scale }, col);
+        if (sprite.m_pTexture) {
+            sprite.SetRenderState();
+            CSprite2d::Draw({ x - (sw), y - (sh), x + (sw), y + (sh) }, col);
             CSprite2d::ClearRenderState();
         }
     }
@@ -225,17 +240,16 @@ public:
             float y = ScaleY(152.5f);
             float scale = ScaleY(33.0f);
             auto sprite = m_SpriteLoader.GetSprite(name);
-            if (sprite) {
-                sprite->SetRenderState();
+            if (sprite.m_pTexture) {
+                sprite.SetRenderState();
                 CSprite2d::Draw({ x - scale, y - scale, x + scale, y + scale }, { 255, 255, 255, 255 });
                 CSprite2d::ClearRenderState();
-                sprite = nullptr;
             }
 
             scale += ScaleY(4.0f);
             sprite = m_SpriteLoader.GetSprite("radio_current");
-            if (sprite) {
-                sprite->SetRenderState();
+            if (sprite.m_pTexture) {
+                sprite.SetRenderState();
                 CSprite2d::Draw({ x - scale, y - scale, x + scale, y + scale }, GetColorForEpisode());
                 CSprite2d::ClearRenderState();
             }
@@ -280,27 +294,43 @@ public:
     static inline void Overlay() {
         rage::Color32 col = GetColorForEpisode();
         col.a = 25;
-        rage::grcTexturePC* tex = rage::CPostFX::GetInstance()->m_FSCopy;
+        rage::grcTexturePC* tex = rage::CPostFX::GetInstance()->m_FSCopy2->GetTexture();
 
         static CSprite2d sprite = {};
         sprite.m_pTexture = tex;
         sprite.SetRenderState();
 
         auto dev = GetD3DDevice<IDirect3DDevice9>();
+    
+        IDirect3DPixelShader9* pp;
+        dev->GetPixelShader(&pp);
         dev->SetPixelShader(m_BlurShader);
-        dev->SetPixelShaderConstantF(0, m_fShaderConstant, 1);
 
-        CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, { 25, 25, 25, 255 });
+        float flt[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        dev->SetPixelShaderConstantF(0, flt, 1);
 
-        dev->SetPixelShader(nullptr);
+        CSprite2d::Draw({ -10.0f, -10.0f, SCREEN_WIDTH + 10.0f, SCREEN_HEIGHT + 10.0f }, { 255, 255, 255, 255 });
+
+        dev->SetPixelShader(pp);
 
         CSprite2d::ClearRenderState();
 
         //
-        //CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, col);
+        CSprite2d::Draw(0.0f, 0.0f, SCREEN_WIDTH, SCREEN_HEIGHT, col);
     }
 
     static inline void DrawWheel() {
+        auto dev = GetD3DDevice<IDirect3DDevice9>();
+        dev->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
+        dev->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+        dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+        dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+        dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+        dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+        dev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+        dev->SetRenderState(D3DRS_LIGHTING, FALSE);
+        dev->SetRenderState(D3DRS_FOGENABLE, FALSE);
+    
         if (CCutsceneMgr::IsRunning())
             return;
 
@@ -510,6 +540,14 @@ public:
 
         pattern = plugin::pattern::Get("83 EC 4C 56 8B F1 8A 86");
         plugin::patch::RedirectJump(pattern, UpdatePlayerVehicleRadio);
+
+        // higher quality fscopy2
+        pattern = plugin::pattern::Get("68 ? ? ? ? 89 45 0C", 1);
+        plugin::patch::SetInt(pattern, 1024);
+
+        pattern = plugin::pattern::Get("68 ? ? ? ? C7 84 24 ? ? ? ? ? ? ? ? 8B 01 6A 03 68 ? ? ? ? FF 50 38 89 45 10", 1);
+        plugin::patch::SetInt(pattern, 1024);
+
     }
 
     static void PopulateTracksMap() {

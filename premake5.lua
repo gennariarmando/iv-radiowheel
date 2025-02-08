@@ -13,7 +13,7 @@ project "iv-radiowheel"
 	buildoptions { "/permissive" }
 	defines { "_CRT_SECURE_NO_WARNINGS", "_CRT_NON_CONFORMING_SWPRINTFS", "_USE_MATH_DEFINES" }
 	disablewarnings { "4244", "4800", "4305", "4073", "4838", "4996", "4221", "4430", "26812", "26495", "6031" }
-	cppdialect "c++17"
+	cppdialect "c++latest"
 
 	files {
 		"source/**.*",
